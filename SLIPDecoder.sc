@@ -11,15 +11,20 @@ SLIPDecoder {
 		rate = b;
 		numAddresses = c;
 		port = SerialPort(deviceName, rate);
-		actions = {}!numAddresses; //second byte in the data array is its address if it's properly configured in OSC. THIS MIGHT BE DIFFERENT FOR DIFFERENT VERSIONS OF THE OSC PROTOCOL. This value is used to select between a number of actions which can be externally set. Each action is a function that takes the message contents as an argument. see 'decode' below. 
-		decode = {|data| //function for decoding the properly-SLIP-decoded message. 
-			var temp = 0!15, address, output;
-			//data[1].asAscii.postln;
-			address = data[1].asAscii.asString.asInt;
-			//":".post;
+		actions = {}!numAddresses; //second byte in the data array is its address if it's properly configured in OSC. THIS MIGHT BE DIFFERENT FOR DIFFERENT VERSIONS OF THE OSC PROTOCOL. This value is used to select between a number of actions which can be externally set. Each action is a function that takes the message contents as an argument. see 'decode' below.
+		decode = {|data| //function for decoding the properly-SLIP-decoded message.
+			var temp = 0!15, address,endNames, output;
+			address=data.findAll(Int8Array[47])+1;
+			endNames=address.collect({|item|data.find(Int8Array[0],item)});
+			address=endNames.collect({|item,i|   (data[ (address[i]) .. (item-1)]).collect({|it| it.asAscii.asString.asInteger}).convertDigits()   });
 			output = (data[data.size-2].asBinaryDigits.at([6,7]) ++ data[data.size-1].asBinaryDigits).convertDigits(2);
-			actions[address].value(output);
+			actions[address[0]].value([address,output]);
 		}
+	}
+
+	stopSerial {
+		port.close();
+
 	}
 
 	start {
@@ -45,8 +50,9 @@ SLIPDecoder {
 				serialByte = port.read;
 				serialByte.switch(
 					slipEND, {
+						if(buffer.size()!=0,{
 						decode.value(buffer);
-						buffer = Int8Array(maxSize:maxPacketSize);
+						buffer = Int8Array(maxSize:maxPacketSize);});
 					},
 					slipESC, {
 						serialByte = port.read;
